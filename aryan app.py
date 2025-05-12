@@ -28,9 +28,11 @@ def extract_text_from_pdf(uploaded_file):
 def extract_text_from_url(url):
     try:
         response = requests.get(url)
+        response.raise_for_status()  # This will raise an error for bad HTTP status codes
         soup = BeautifulSoup(response.content, "html.parser")
         return soup.get_text()
-    except:
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error fetching URL: {e}")
         return ""
 
 # Function to generate graph from text
