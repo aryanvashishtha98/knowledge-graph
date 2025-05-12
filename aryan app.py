@@ -2,7 +2,7 @@ import streamlit as st
 from pyvis.network import Network
 import tempfile
 import os
-import pdfplumber  # Replaced fitz (PyMuPDF) with pdfplumber
+import pdfplumber
 import requests
 from bs4 import BeautifulSoup
 import spacy
@@ -13,29 +13,30 @@ import streamlit.components.v1 as components
 nlp = spacy.load("en_core_web_sm")
 
 st.set_page_config(page_title="Knowledge Graph Generator", layout="wide")
-
 st.title("📚 Knowledge Graph Generator from PDF / URL / Text")
 
-# Function to extract text from PDF using pdfplumber
+# Extract text from PDF
 def extract_text_from_pdf(uploaded_file):
     text = ""
     with pdfplumber.open(uploaded_file) as pdf:
         for page in pdf.pages:
-            text += page.extract_text()
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text
     return text
 
-# Function to extract text from URL
+# Extract text from URL
 def extract_text_from_url(url):
     try:
         response = requests.get(url)
-        response.raise_for_status()  # This will raise an error for bad HTTP status codes
+        response.raise_for_status()
         soup = BeautifulSoup(response.content, "html.parser")
         return soup.get_text()
     except requests.exceptions.RequestException as e:
         st.error(f"Error fetching URL: {e}")
         return ""
 
-# Function to generate graph from text
+# Generate knowledge graph
 def generate_knowledge_graph(text):
     doc = nlp(text)
     edges = []
@@ -47,22 +48,22 @@ def generate_knowledge_graph(text):
     graph.add_edges_from(edges)
     return graph
 
-# Function to display graph using pyvis
+# Display graph in Streamlit using pyvis
 def display_graph(graph):
-    net = Network(height="600px", width="100%", directed=True)
+    net = Network(height="600px", width="100%", directed=True, notebook=False)
+
     for node in graph.nodes:
         net.add_node(node, label=node)
     for source, target in graph.edges:
         net.add_edge(source, target)
 
-    # Save to temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_file:
         path = tmp_file.name
-        net.show(path)
+        net.write_html(path)
 
     with open(path, "r", encoding="utf-8") as f:
         html = f.read()
-        components.html(html, height=600, scrolling=True)
+        components.html(html, height=600, scrolling=False)
 
     os.remove(path)
 
@@ -81,11 +82,15 @@ elif option == "URL":
         text = extract_text_from_url(url)
 
 elif option == "Text":
-    text = st.text_area("Enter Text")
+    text = st.text_area("Enter Text", height=200)
 
-# Generate graph
-if st.button("Generate Knowledge Graph") and text:
+# Generate button with unique key
+if st.button("Generate Knowledge Graph", key="generate_button") and text:
     graph = generate_knowledge_graph(text)
-    display_graph(graph)
-elif st.button("Generate Knowledge Graph"):
+    st.write(f"✅ Nodes: {len(graph.nodes)}, Edges: {len(graph.edges)}")
+    if len(graph.nodes) == 0:
+        st.warning("No relationships found in the text. Try using more descriptive sentences.")
+    else:
+        display_graph(graph)
+elif st.button("Generate", key="warn_button"):
     st.warning("Please provide some content first.")
