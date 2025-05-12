@@ -1,0 +1,6 @@
+streamlit
+pyvis
+spacy
+PyPDF2
+beautifulsoup4
+networkx
