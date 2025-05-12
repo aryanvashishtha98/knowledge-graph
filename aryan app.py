@@ -1,85 +1,89 @@
 import streamlit as st
-import PyPDF2
+from pyvis.network import Network
+import tempfile
+import os
+import fitz  # PyMuPDF
 import requests
 from bs4 import BeautifulSoup
 import spacy
 import networkx as nx
-from pyvis.network import Network
-import tempfile
-import os
+import streamlit.components.v1 as components
 
 # Load spaCy model
-try:
-    nlp = spacy.load("en_core_web_sm")
-except:
-    from spacy.cli import download
-    download("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
+nlp = spacy.load("en_core_web_sm")
 
-def extract_text_from_pdf(pdf_file):
-    reader = PyPDF2.PdfReader(pdf_file)
+st.set_page_config(page_title="Knowledge Graph Generator", layout="wide")
+
+st.title("📚 Knowledge Graph Generator from PDF / URL / Text")
+
+# Function to extract text from PDF
+def extract_text_from_pdf(uploaded_file):
     text = ""
-    for page in reader.pages:
-        text += page.extract_text() or ""
+    with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
+        for page in doc:
+            text += page.get_text()
     return text
 
+# Function to extract text from URL
 def extract_text_from_url(url):
     try:
         response = requests.get(url)
         soup = BeautifulSoup(response.content, "html.parser")
         return soup.get_text()
-    except Exception as e:
-        return f"Error fetching URL: {e}"
+    except:
+        return ""
 
-def create_knowledge_graph(text):
+# Function to generate graph from text
+def generate_knowledge_graph(text):
     doc = nlp(text)
-    G = nx.Graph()
+    edges = []
     for sent in doc.sents:
         for token in sent:
-            if token.dep_ in ("nsubj", "dobj"):
-                source = token.head.text
-                target = token.text
-                G.add_edge(source, target)
-    return G
+            if token.dep_ in ("nsubj", "dobj") and token.head.pos_ == "VERB":
+                edges.append((token.head.lemma_, token.lemma_))
+    graph = nx.DiGraph()
+    graph.add_edges_from(edges)
+    return graph
 
+# Function to display graph using pyvis
 def display_graph(graph):
-    net = Network(notebook=False)
+    net = Network(height="600px", width="100%", directed=True)
     for node in graph.nodes:
         net.add_node(node, label=node)
-    for edge in graph.edges:
-        net.add_edge(edge[0], edge[1])
-    tmp_dir = tempfile.mkdtemp()
-    path = os.path.join(tmp_dir, "graph.html")
-    net.show(path)
-    with open(path, "r", encoding="utf-8") as file:
-        html = file.read()
-    return html
+    for source, target in graph.edges:
+        net.add_edge(source, target)
 
-# Streamlit UI
-st.title("Knowledge Graph Generator")
-st.markdown("Upload a PDF, enter a URL, or type text to generate a knowledge graph.")
+    # Save to temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp_file:
+        path = tmp_file.name
+        net.show(path)
 
-option = st.radio("Choose input type:", ["PDF", "URL", "Text"])
+    with open(path, "r", encoding="utf-8") as f:
+        html = f.read()
+        components.html(html, height=600, scrolling=True)
 
-text_data = ""
+    os.remove(path)
 
+# Input options
+option = st.radio("Select Input Type", ["PDF", "URL", "Text"])
+
+text = ""
 if option == "PDF":
     uploaded_file = st.file_uploader("Upload a PDF", type="pdf")
     if uploaded_file:
-        text_data = extract_text_from_pdf(uploaded_file)
+        text = extract_text_from_pdf(uploaded_file)
 
 elif option == "URL":
     url = st.text_input("Enter URL")
-    if st.button("Fetch URL Content"):
-        if url:
-            text_data = extract_text_from_url(url)
+    if url:
+        text = extract_text_from_url(url)
 
 elif option == "Text":
-    text_data = st.text_area("Enter text")
+    text = st.text_area("Enter Text")
 
-if text_data:
-    st.success("Text extracted successfully.")
-    graph = create_knowledge_graph(text_data)
-    st.subheader("Knowledge Graph")
-    html = display_graph(graph)
-    st.components.v1.html(html, height=600, scrolling=True)
+# Generate graph
+if st.button("Generate Knowledge Graph") and text:
+    graph = generate_knowledge_graph(text)
+    display_graph(graph)
+elif st.button("Generate Knowledge Graph"):
+    st.warning("Please provide some content first.")
