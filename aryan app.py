@@ -2,7 +2,7 @@ import streamlit as st
 from pyvis.network import Network
 import tempfile
 import os
-import fitz  # PyMuPDF
+import pdfplumber  # Replaced fitz (PyMuPDF) with pdfplumber
 import requests
 from bs4 import BeautifulSoup
 import spacy
@@ -16,12 +16,12 @@ st.set_page_config(page_title="Knowledge Graph Generator", layout="wide")
 
 st.title("📚 Knowledge Graph Generator from PDF / URL / Text")
 
-# Function to extract text from PDF
+# Function to extract text from PDF using pdfplumber
 def extract_text_from_pdf(uploaded_file):
     text = ""
-    with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
-        for page in doc:
-            text += page.get_text()
+    with pdfplumber.open(uploaded_file) as pdf:
+        for page in pdf.pages:
+            text += page.extract_text()
     return text
 
 # Function to extract text from URL
