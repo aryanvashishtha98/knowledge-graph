@@ -1,7 +1,5 @@
-services:
-  - type: web
-    name: knowledge-graph
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run "aryan app.py"
-    plan: free
+type: web
+name: knowledge-graph-app
+env: python
+buildCommand: pip install -r requirements.txt
+startCommand: streamlit run "aryan app.py"
